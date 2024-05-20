@@ -15,7 +15,7 @@ using namespace std;
 #define VERSION "Version 1.0"
 #define AUTHOR "Copyright (c) Kirill Belozerov, 2021-2024. All Rights Reserved."
 
-#define DEBUG 1.0
+//#define DEBUG 1.0
 
 
 #ifdef DEBUG
@@ -96,28 +96,15 @@ string DecodeMachineCode(string machineCode)
         }
         unsigned int rs1 = (instr >> 15) & 0x1F;
         int imm = static_cast<int>(instr >> 20);
-        int masked = imm & 0xFFF;
-
-        // Проверяем знак числа
-        bool isNegative = masked & (1 << 11);
+        bool isNegative = imm & (1 << 11);
         if (isNegative) 
         {
-            masked = (~masked + 1) & 0xFFF;
+            imm = (~imm + 1) & 0xFFF;
         }
 
-        // Преобразуем в 16-ричную строку
-        std::stringstream ss;
-        ss << std::setw(3) << std::setfill('0') << std::hex << masked;
-
-        // Добавляем префикс "-" для отрицательных чисел
-        if (isNegative) 
-        {
-            ss << "-";
-        }
-
-        return "lw " + GetRegisterName(rd) + ", " + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
+        return "lw " + GetRegisterName(rd) + ", " + (isNegative ? "-" : "") + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
     }
-    case 0x23: // sw
+    case 0x23: // sw ?
     {
         unsigned int rs2 = (instr >> 20) & 0x1F;
         unsigned int rs1 = (instr >> 15) & 0x1F;
@@ -127,7 +114,13 @@ string DecodeMachineCode(string machineCode)
             return "Invalid instruction";
         }
         int imm = static_cast<int>(instr >> 25 << 5 | instr >> 7 & 0x1F);
-        return "sw " + GetRegisterName(rs2) + ", " + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
+        bool isNegative = imm & (1 << 11);
+        if (isNegative)
+        {
+            imm = (~imm + 1) & 0xFFF;
+        }
+
+        return "sw " + GetRegisterName(rs2) + ", " + (isNegative ? "-" : "") + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
     }
     case 0x33: // or
     {
@@ -141,7 +134,7 @@ string DecodeMachineCode(string machineCode)
         unsigned int rs2 = (instr >> 20) & 0x1F;
         return "or " + GetRegisterName(rd) + ", " + GetRegisterName(rs1) + ", " + GetRegisterName(rs2);
     }
-    case 0x13: // addi
+    case 0x13: // addi ?
     {
         unsigned int rd = (instr >> 7) & 0x1F;
         unsigned int funct3 = (instr >> 12) & 0x7;
@@ -151,15 +144,27 @@ string DecodeMachineCode(string machineCode)
         }
         unsigned int rs1 = (instr >> 15) & 0x1F;
         int imm = static_cast<int>(instr >> 20);
-        return "addi " + GetRegisterName(rd) + ", " + GetRegisterName(rs1) + ", " + to_string(imm);
+        bool isNegative = imm & (1 << 11);
+        if (isNegative)
+        {
+            imm = (~imm + 1) & 0xFFF;
+        }
+        
+        return "addi " + GetRegisterName(rd) + ", " + GetRegisterName(rs1) + ", " + (isNegative ? "-" : "") + to_string(imm);
     }
-    case 0x6F: // jal
+    case 0x6F: // jal 
     {
         unsigned int rd = (instr >> 7) & 0x1F;
         int imm = static_cast<int>(instr >> 21 << 1); // imm[20|10:1|11|19:12]
-        return "jal " + GetRegisterName(rd) + ", " + to_string(imm);
+        bool isNegative = imm & (1 << 11);
+        if (isNegative)
+        {
+            imm = (~imm + 1) & 0xFFF;
+        }
+
+        return "jal " + GetRegisterName(rd) + ", " + (isNegative ? "-" : "") + to_string(imm);
     }
-    case 0x63: // beq
+    case 0x63: // beq ?
     {
         unsigned int rs1 = (instr >> 15) & 0x1F;
         unsigned int rs2 = (instr >> 20) & 0x1F;
@@ -168,8 +173,14 @@ string DecodeMachineCode(string machineCode)
         {
             return "Invalid instruction";
         }
-        int imm = static_cast<int>(instr >> 25 << 5 | instr >> 8 & 0xF << 1 | instr >> 7 & 0x1 << 11); // imm[12|10:5|4:1|11]
-        return "beq " + GetRegisterName(rs1) + ", " + GetRegisterName(rs2) + ", " + to_string(imm);
+        int imm = static_cast<int>(instr >> 31 << 12 | instr >> 25 << 5 | ((instr >> 8) & 0xF) << 1 | instr >> 7 & 0x1 << 11); // imm[12|10:5|4:1|11]
+        bool isNegative = imm & (1 << 11);
+        if (isNegative)
+        {
+            imm = (~imm + 1) & 0xFFF;
+        }
+        
+        return "beq " + GetRegisterName(rs1) + ", " + GetRegisterName(rs2) + ", " + (isNegative ? "-" : "") + to_string(imm);
     }
     default:
         return "Invalid instruction";
@@ -198,7 +209,8 @@ int main()
 #ifndef DEBUG
     cin >> choice;
 #else
-    choice = '2';
+    choice = '1';
+    cout << endl;
 #endif
 
     if (choice == '1') 
@@ -208,7 +220,8 @@ int main()
 #ifndef DEBUG
         cin >> filename;
 #else
-        filename = "1.asm";
+        filename = "2.asm";
+        cout << endl;
 #endif  
     }
     else if (choice == '2') 
@@ -218,7 +231,8 @@ int main()
 #ifndef DEBUG
         cin >> filename;
 #else
-        filename = "1.asm";
+        filename = "2.asm";
+        cout << endl;
 #endif 
         
         ifstream file(filename);
@@ -253,13 +267,16 @@ int main()
         cin >> choice;
 #else
         choice = '1';
+        cout << endl;
 #endif     
 
         if (choice == '1') 
         {
             cout << "Enter line: ";
             //cin >> line;
+#ifndef DEBUG
             cin.ignore();
+#endif
             getline(cin, line);
 
             // Разбиваем строку на инструкцию и операнды
@@ -289,7 +306,7 @@ int main()
                 istringstream iss(op2);
                 iss >> imm >> op3;
                 rs1 = regMap[op3];
-                machineCode = DecToHex(((imm & 0xFE0) << 25) | (rs1 << 15) | (rs2 << 20) | (funct3 << 12) | ((imm & 0x01F) << 7) | opcode);
+                machineCode = DecToHex((((imm & 0xFE0) >> 5) << 25) | (rs1 << 15) | (rs2 << 20) | (funct3 << 12) | ((imm & 0x01F) << 7) | opcode);
             }
             else if (instr == "or") 
             {
