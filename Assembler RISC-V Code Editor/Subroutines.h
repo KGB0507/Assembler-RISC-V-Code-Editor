@@ -26,8 +26,6 @@ map<string, int> regMap =
     {"x30", 30}, {"t5", 30}, {"x31", 31}, {"t6", 31}
 };
 
-
-
 string DecToHex(int n);
 
 string GetRegisterName(int regNum);

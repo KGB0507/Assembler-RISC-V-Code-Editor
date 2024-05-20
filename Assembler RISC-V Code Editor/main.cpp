@@ -1,4 +1,11 @@
-#include "Subroutines.h"
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <map>
+#include <vector>
+#include <iostream>
+
 
 
 using namespace std;
@@ -18,14 +25,165 @@ using namespace std;
 
 
 
+map<string, int> regMap =
+{
+    {"x0", 0}, {"zero", 0}, {"x1", 1}, {"ra", 1}, {"x2", 2}, {"sp", 2},
+    {"x3", 3}, {"gp", 3}, {"x4", 4}, {"tp", 4}, {"x5", 5}, {"t0", 5},
+    {"x6", 6}, {"t1", 6}, {"x7", 7}, {"t2", 7}, {"x8", 8}, {"s0", 8},
+    {"x9", 9}, {"s1", 9}, {"x10", 10}, {"a0", 10}, {"x11", 11}, {"a1", 11},
+    {"x12", 12}, {"a2", 12}, {"x13", 13}, {"a3", 13}, {"x14", 14}, {"a4", 14},
+    {"x15", 15}, {"a5", 15}, {"x16", 16}, {"a6", 16}, {"x17", 17}, {"a7", 17},
+    {"x18", 18}, {"s2", 18}, {"x19", 19}, {"s3", 19}, {"x20", 20}, {"s4", 20},
+    {"x21", 21}, {"s5", 21}, {"x22", 22}, {"s6", 22}, {"x23", 23}, {"s7", 23},
+    {"x24", 24}, {"s8", 24}, {"x25", 25}, {"s9", 25}, {"x26", 26}, {"s10", 26},
+    {"x27", 27}, {"s11", 27}, {"x28", 28}, {"t3", 28}, {"x29", 29}, {"t4", 29},
+    {"x30", 30}, {"t5", 30}, {"x31", 31}, {"t6", 31}
+};
+
+string DecToHex(int n)
+{
+    stringstream ss;
+    ss << setfill('0') << setw(8) << hex << n;
+    return ss.str();
+}
+
+string GetRegisterName(int regNum)
+{
+    /*
+    static const string registerNames[] =
+    {
+        "x0", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0", "s1",
+        "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "s2", "s3",
+        "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "t3", "t4",
+        "t5", "t6"
+    };*/
+    
+    static const string registerNames[] =
+    {
+        "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
+        "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19",
+        "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x29",
+        "x30", "x31"
+    };
+
+    if (regNum >= 0 && regNum < 32)
+    {
+        return registerNames[regNum];
+    }
+    else
+    {
+        return "invalid";
+    }
+}
+
+string DecodeMachineCode(string machineCode)
+{
+    unsigned int instr;
+    stringstream ss;
+    ss << hex << machineCode;
+    ss >> instr;
+
+    unsigned int opcode = instr & 0x7F;
+    switch (opcode)
+    {
+    case 0x03: // lw
+    {
+        unsigned int rd = (instr >> 7) & 0x1F;
+        unsigned int funct3 = (instr >> 12) & 0x7;
+        if (funct3 != 0x2)
+        {
+            return "Invalid instruction";
+        }
+        unsigned int rs1 = (instr >> 15) & 0x1F;
+        int imm = static_cast<int>(instr >> 20);
+        int masked = imm & 0xFFF;
+
+        // Проверяем знак числа
+        bool isNegative = masked & (1 << 11);
+        if (isNegative) 
+        {
+            masked = (~masked + 1) & 0xFFF;
+        }
+
+        // Преобразуем в 16-ричную строку
+        std::stringstream ss;
+        ss << std::setw(3) << std::setfill('0') << std::hex << masked;
+
+        // Добавляем префикс "-" для отрицательных чисел
+        if (isNegative) 
+        {
+            ss << "-";
+        }
+
+        return "lw " + GetRegisterName(rd) + ", " + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
+    }
+    case 0x23: // sw
+    {
+        unsigned int rs2 = (instr >> 20) & 0x1F;
+        unsigned int rs1 = (instr >> 15) & 0x1F;
+        unsigned int funct3 = (instr >> 12) & 0x7;
+        if (funct3 != 0x2)
+        {
+            return "Invalid instruction";
+        }
+        int imm = static_cast<int>(instr >> 25 << 5 | instr >> 7 & 0x1F);
+        return "sw " + GetRegisterName(rs2) + ", " + to_string(imm) + "(" + GetRegisterName(rs1) + ")";
+    }
+    case 0x33: // or
+    {
+        unsigned int rd = (instr >> 7) & 0x1F;
+        unsigned int funct3 = (instr >> 12) & 0x7;
+        if (funct3 != 0x6)
+        {
+            return "Invalid instruction";
+        }
+        unsigned int rs1 = (instr >> 15) & 0x1F;
+        unsigned int rs2 = (instr >> 20) & 0x1F;
+        return "or " + GetRegisterName(rd) + ", " + GetRegisterName(rs1) + ", " + GetRegisterName(rs2);
+    }
+    case 0x13: // addi
+    {
+        unsigned int rd = (instr >> 7) & 0x1F;
+        unsigned int funct3 = (instr >> 12) & 0x7;
+        if (funct3 != 0x0)
+        {
+            return "Invalid instruction";
+        }
+        unsigned int rs1 = (instr >> 15) & 0x1F;
+        int imm = static_cast<int>(instr >> 20);
+        return "addi " + GetRegisterName(rd) + ", " + GetRegisterName(rs1) + ", " + to_string(imm);
+    }
+    case 0x6F: // jal
+    {
+        unsigned int rd = (instr >> 7) & 0x1F;
+        int imm = static_cast<int>(instr >> 21 << 1); // imm[20|10:1|11|19:12]
+        return "jal " + GetRegisterName(rd) + ", " + to_string(imm);
+    }
+    case 0x63: // beq
+    {
+        unsigned int rs1 = (instr >> 15) & 0x1F;
+        unsigned int rs2 = (instr >> 20) & 0x1F;
+        unsigned int funct3 = (instr >> 12) & 0x7;
+        if (funct3 != 0x0)
+        {
+            return "Invalid instruction";
+        }
+        int imm = static_cast<int>(instr >> 25 << 5 | instr >> 8 & 0xF << 1 | instr >> 7 & 0x1 << 11); // imm[12|10:5|4:1|11]
+        return "beq " + GetRegisterName(rs1) + ", " + GetRegisterName(rs2) + ", " + to_string(imm);
+    }
+    default:
+        return "Invalid instruction";
+    }
+}
+
 
 
 int main()
 {
-    cout << "Assembler RISC-V Code Editor " << VERSION << std::endl;
-    cout << AUTHOR << std::endl;
+    cout << "Assembler RISC-V Code Editor " << VERSION << endl;
+    cout << AUTHOR << endl;
 #ifdef DEBUG
-    cout << UNDERCONSTR << std::endl << std::endl;
+    cout << UNDERCONSTR << endl << endl;
 #endif
 
     string filename, line, text = "";
@@ -40,7 +198,7 @@ int main()
 #ifndef DEBUG
     cin >> choice;
 #else
-    choice = '1';
+    choice = '2';
 #endif
 
     if (choice == '1') 
@@ -50,7 +208,7 @@ int main()
 #ifndef DEBUG
         cin >> filename;
 #else
-        filename = "example.asm";
+        filename = "1.asm";
 #endif  
     }
     else if (choice == '2') 
@@ -60,7 +218,7 @@ int main()
 #ifndef DEBUG
         cin >> filename;
 #else
-        filename = "example.asm";
+        filename = "1.asm";
 #endif 
         
         ifstream file(filename);
